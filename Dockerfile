@@ -19,4 +19,4 @@ RUN bash -c "source /opt/ros/jazzy/setup.bash && ./build.bash"
 RUN chmod +x entrypoint.sh && cp entrypoint.sh /usr/local/bin/
 ENTRYPOINT ["entrypoint.sh"]
 # Default command to run the driver
-CMD ["ros2", "launch", "seyond", "start.py"]
+CMD ["ros2", "launch", "seyond", "start_with_config.py"]
