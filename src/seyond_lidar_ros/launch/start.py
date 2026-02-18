@@ -3,13 +3,10 @@ from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch.actions import SetEnvironmentVariable
-from ament_index_python.packages import get_package_share_directory
-
 import os
 
 
 def generate_launch_description():
-    rviz_config=get_package_share_directory('seyond')+'/rviz/rviz2.rviz'
 
     return LaunchDescription(
         [
@@ -219,6 +216,5 @@ def generate_launch_description():
                     {'transform_matrix': LaunchConfiguration('transform_matrix')},
                 ],
             ),
-            Node(namespace='rviz2', package='rviz2', executable='rviz2', arguments=['-d',rviz_config])
         ]
     )

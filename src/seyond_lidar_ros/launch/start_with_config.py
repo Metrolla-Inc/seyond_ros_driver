@@ -9,7 +9,6 @@ import os
 
 
 def generate_launch_description():
-    rviz_config=get_package_share_directory('seyond')+'/rviz/rviz2.rviz'
     yaml_config=get_package_share_directory('seyond')+'/config.yaml'
 
     return LaunchDescription(
@@ -31,6 +30,5 @@ def generate_launch_description():
                     {'config_path': LaunchConfiguration('config_path')},
                 ],
             ),
-            Node(namespace='rviz2', package='rviz2', executable='rviz2', arguments=['-d',rviz_config])
         ]
     )
