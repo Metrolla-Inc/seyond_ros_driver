@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+FROM --platform=linux/amd64 ros:jazzy-perception-noble
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ROS_DISTRO=jazzy
+
+WORKDIR /opt/metrolla/seyond
+
+# Copy the pre-built deb package
+COPY seyond-ros2-jazzy-3.103.10-rv3.6.7-x86.deb /tmp/seyond-driver.deb
+
+# Install the deb package and its dependencies
+RUN apt-get update && \
+    apt-get install -y /tmp/seyond-driver.deb \
+    iproute2 \
+    ros-jazzy-rviz2 \
+    && rm -f /tmp/seyond-driver.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy config, launch files, and entrypoint
+COPY src/seyond_lidar_ros/config/config.yaml config/config.yaml
+COPY src/seyond_lidar_ros/launch/ launch/
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["entrypoint.sh"]
+CMD ["ros2", "launch", "seyond", "start_with_config.py"]
