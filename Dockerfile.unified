@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+
+# Stage 1: Build the source-based driver
+FROM --platform=linux/amd64 ros:jazzy-perception-noble AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ROS_DISTRO=jazzy
+
+WORKDIR /opt/metrolla/seyond
+COPY . .
+
+RUN apt-get update && apt-get install -y \
+    git \
+    iproute2 \
+    libyaml-cpp-dev \
+    python3-colcon-common-extensions \
+    && rm -rf /var/lib/apt/lists/*
+
+# Initialize submodules (in case they weren't populated on the host)
+RUN git submodule update --init --recursive || true
+
+# Build the driver from source
+RUN bash -c "source /opt/ros/jazzy/setup.bash && ./build.bash"
+
+# Stage 2: Final unified image
+FROM --platform=linux/amd64 ros:jazzy-perception-noble
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ROS_DISTRO=jazzy
+
+WORKDIR /opt/metrolla/seyond
+
+# Copy the source-built workspace from the builder stage
+COPY --from=builder /opt/metrolla/seyond/install/ /opt/metrolla/seyond/install/
+
+# Copy and install the deb package (Hummingbird driver)
+COPY seyond-ros2-jazzy-3.103.10-rv3.6.7-x86.deb /tmp/seyond-driver.deb
+
+RUN apt-get update && \
+    apt-get install -y /tmp/seyond-driver.deb \
+    iproute2 \
+    ros-jazzy-rviz2 \
+    libyaml-cpp-dev \
+    && rm -f /tmp/seyond-driver.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy config, launch files, and entrypoint
+COPY src/seyond_lidar_ros/config/config.yaml config/config.yaml
+COPY src/seyond_lidar_ros/launch/ launch/
+COPY entrypoint-unified.sh /usr/local/bin/entrypoint-unified.sh
+RUN chmod +x /usr/local/bin/entrypoint-unified.sh
+
+ENTRYPOINT ["entrypoint-unified.sh"]
+CMD ["ros2", "launch", "seyond", "start_with_config.py"]

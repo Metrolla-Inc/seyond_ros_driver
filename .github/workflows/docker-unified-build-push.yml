@@ -1,4 +1,4 @@
-name: Docker Deb Build and Push
+name: Docker Unified Build and Push
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push-deb:
+  build-and-push-unified:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,6 +32,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
+          submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.GA_TOKEN }}
 
@@ -56,13 +57,13 @@ jobs:
           echo "tag=$SAFE_TAG" >> "$GITHUB_OUTPUT"
           echo "Using tag: $SAFE_TAG"
 
-      - name: Build and push deb-based Docker image (amd64 only)
+      - name: Build and push unified Docker image (amd64 only)
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: Dockerfile.deb
+          file: Dockerfile.unified
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/metrolla-inc/seyond_drivers:${{ steps.tag.outputs.tag }}-hb
-          cache-from: type=registry,ref=ghcr.io/metrolla-inc/seyond_drivers:latest-hb
-          cache-to: type=registry,ref=ghcr.io/metrolla-inc/seyond_drivers:latest-hb,mode=max
+          tags: ghcr.io/metrolla-inc/seyond_drivers:${{ steps.tag.outputs.tag }}-unified
+          cache-from: type=registry,ref=ghcr.io/metrolla-inc/seyond_drivers:latest-unified
+          cache-to: type=registry,ref=ghcr.io/metrolla-inc/seyond_drivers:latest-unified,mode=max
