@@ -51,4 +51,4 @@ COPY entrypoint-unified.sh /usr/local/bin/entrypoint-unified.sh
 RUN chmod +x /usr/local/bin/entrypoint-unified.sh
 
 ENTRYPOINT ["entrypoint-unified.sh"]
-CMD ["bash", "-c", "sleep 10; ros2 launch seyond start_with_config.py"]
+CMD ["bash", "-c", "sleep 30; ros2 launch seyond start_with_config.py"]
