@@ -9,7 +9,10 @@ import os
 
 
 def generate_launch_description():
-    yaml_config=get_package_share_directory('seyond')+'/config.yaml'
+    yaml_config = get_package_share_directory('seyond') + '/config.yaml'
+    if os.environ.get('DUAL_LIDAR') is True or 1 or "1":
+        yaml_config=get_package_share_directory('seyond')+'/two-config.yaml'
+
 
     return LaunchDescription(
         [

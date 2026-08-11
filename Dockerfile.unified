@@ -46,6 +46,7 @@ RUN apt-get update && \
 
 # Copy config, launch files, and entrypoint
 COPY src/seyond_lidar_ros/config/config.yaml config/config.yaml
+COPY src/seyond_lidar_ros/config/two-config.yaml config/two-config.yaml
 COPY src/seyond_lidar_ros/launch/ launch/
 COPY entrypoint-unified.sh /usr/local/bin/entrypoint-unified.sh
 RUN chmod +x /usr/local/bin/entrypoint-unified.sh
