@@ -129,6 +129,7 @@ if($ENV{ROS_VERSION} MATCHES "2")
   )
   install(FILES
     config/config.yaml
+    config/two-config.yaml
     DESTINATION share/${PROJECT_NAME}
   )
 
@@ -226,6 +227,7 @@ if($ENV{ROS_VERSION} MATCHES "1")
 
   install(FILES
     config/config.yaml
+    config/two-config.yaml
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 
 endif($ENV{ROS_VERSION} MATCHES "1")
