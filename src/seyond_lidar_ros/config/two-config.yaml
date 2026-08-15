@@ -48,7 +48,7 @@ lidars:
 
       frame_id: seyond2                                #Frame id
       packet_topic: /iv_packets2                       #Packet topic
-      frame_topic: /iv_point2                         #Frame topic
+      frame_topic: /iv_points2                        #Frame topic
 
       lidar_name: seyond2                              #Lidar name
       lidar_ip: 172.168.1.11                          #Lidar ip

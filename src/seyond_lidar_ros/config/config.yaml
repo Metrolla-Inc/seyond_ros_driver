@@ -20,7 +20,7 @@ lidars:
       multiple_return: 1                              #Multiple return
       enable_falcon_ring: false                       #Enable falcon ring_id calculation
 
-      continue_live: false                            #Continue live
+      continue_live: true                             #Continue live (retry/reconnect when the lidar is offline)
 
       pcap_file: ''                                   #Pcap file
       hv_table_file: ''                               #HV table file, for generic lidar's pcap file
