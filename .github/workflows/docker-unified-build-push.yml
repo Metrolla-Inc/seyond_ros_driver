@@ -106,6 +106,7 @@ jobs:
             -e REGISTRY_STORAGE_S3_ACCESSKEY="${{ secrets.R2_ACCESS_KEY_ID }}" \
             -e REGISTRY_STORAGE_S3_SECRETKEY="${{ secrets.R2_SECRET_ACCESS_KEY }}" \
             -e REGISTRY_STORAGE_S3_FORCEPATHSTYLE=true \
+            -e REGISTRY_STORAGE_S3_ROOTDIRECTORY=data \
             -e REGISTRY_STORAGE_REDIRECT_DISABLE=true \
             -e REGISTRY_STORAGE_S3_CHUNKSIZE=33554432 \
             registry:3
