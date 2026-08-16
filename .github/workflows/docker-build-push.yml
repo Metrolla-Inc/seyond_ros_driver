@@ -111,13 +111,20 @@ jobs:
             -e REGISTRY_STORAGE_S3_SECRETKEY="${{ secrets.R2_SECRET_ACCESS_KEY }}" \
             -e REGISTRY_STORAGE_S3_FORCEPATHSTYLE=true \
             -e REGISTRY_STORAGE_REDIRECT_DISABLE=true \
-            registry:2
+            -e REGISTRY_STORAGE_S3_CHUNKSIZE=33554432 \
+            registry:3
           for i in $(seq 1 30); do curl -fs http://localhost:5000/v2/ >/dev/null && exit 0; sleep 1; done
           echo "registry sidecar failed to start"; docker logs r2reg; exit 1
 
       - name: Sync image to R2 library
         if: steps.r2.outputs.enabled == 'true'
         run: |
-          skopeo copy --all --retry-times 3 --dest-tls-verify=false \
+          set +e
+          for attempt in 1 2 3; do
+            skopeo copy --all --retry-times 3 --dest-tls-verify=false \
             "docker://ghcr.io/metrolla-inc/seyond_drivers:${{ steps.tag.outputs.tag }}" \
-            "docker://localhost:5000/library/seyond_drivers:${{ steps.tag.outputs.tag }}"
+            "docker://localhost:5000/library/seyond_drivers:${{ steps.tag.outputs.tag }}" && exit 0
+            echo "attempt $attempt failed; registry log tail:"; docker logs r2reg 2>&1 | tail -20
+            sleep 15
+          done
+          exit 1
