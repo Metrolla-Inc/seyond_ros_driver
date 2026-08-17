@@ -1,0 +1,77 @@
+name: regression-gate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    name: unit (launch/config contract tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest pyyaml
+
+      - name: Run regression-gate tests
+        run: python -m pytest tests/ -v -ra
+
+  manifest-lint:
+    name: manifest-lint (configs + package manifest parse)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
+      - name: Lint YAML configs and package.xml
+        run: |
+          python - <<'EOF'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          import yaml
+
+          ok = True
+
+          configs = glob.glob("src/seyond_lidar_ros/config/*.yaml")
+          if not configs:
+              print("FAIL: no YAML configs found under src/seyond_lidar_ros/config/")
+              ok = False
+          for path in configs:
+              try:
+                  data = yaml.safe_load(open(path, encoding="utf-8"))
+                  lidars = data["lidars"]
+                  assert isinstance(lidars, list) and lidars, "empty lidars list"
+                  for entry in lidars:
+                      lidar = entry["lidar"]
+                      for key in ("frame_topic", "continue_live", "lidar_ip"):
+                          assert key in lidar, f"missing key: {key}"
+                  print(f"OK:   {path} ({len(lidars)} lidar(s))")
+              except Exception as exc:
+                  print(f"FAIL: {path}: {exc}")
+                  ok = False
+
+          try:
+              root = ET.parse("src/seyond_lidar_ros/package.xml").getroot()
+              name = root.findtext("name")
+              version = root.findtext("version")
+              assert name and version, "package.xml missing name/version"
+              print(f"OK:   package.xml ({name} {version})")
+          except Exception as exc:
+              print(f"FAIL: package.xml: {exc}")
+              ok = False
+
+          sys.exit(0 if ok else 1)
+          EOF
