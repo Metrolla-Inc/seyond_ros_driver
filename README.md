@@ -6,6 +6,24 @@
 
 This project is built on the inno-lidar-sdk and serves as a demonstration for customers, providing a practical reference on how to utilize the inno-lidar-sdk.
 
+## Tests
+
+This repo is part of the org regression-gate program: **all tests must pass to
+produce a release**.
+
+- **[`TESTS.md`](TESTS.md)** — suite inventory, what each suite asserts, the
+  PASS / FAIL / SKIP / ABORT rules, **which environment each suite runs in**, and
+  **where results are stored**.
+- **[`AGENTS.md`](AGENTS.md)** — setup, how to run everything locally, and how the
+  project fits together.
+- Org-wide map of every gated repo and environment:
+  [`infra/REGRESSION-GATES.md`](https://github.com/Metrolla-Inc/infra/blob/master/REGRESSION-GATES.md).
+
+Quick run: `python3 -m pytest tests/ -q`.
+
+Tests live beside the code they test and CI runs them on every push and pull
+request. A test file missing from `TESTS.md` fails the `manifest-lint` job, so the
+inventory cannot go stale.
 ## Directory structure
 
 ```
