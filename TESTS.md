@@ -93,3 +93,38 @@ and unverified must never be reported as healthy.
 Results expire with the log retention and nothing aggregates history yet — flake rate, duration drift, or how long an xfail has been open. That is Phase 6 of the program, not built yet.
 
 Org-wide map of every gated repo and environment: [`infra/REGRESSION-GATES.md`](https://github.com/Metrolla-Inc/infra/blob/master/REGRESSION-GATES.md).
+
+## Adding a test
+
+1. Put the file in `tests/`, named `test_*.py`.
+2. Assert a value — never "it did not raise". If the behaviour you are pinning
+   is a silent fallback, assert the fallback counter directly.
+3. Add a row to the inventory above: what it asserts, its outcome rules, its
+   runtime dependencies. **`manifest-lint` fails the build if you skip this.**
+4. Run it: `python3 -m pytest tests/ -q`
+
+Rules that apply to every test here:
+
+- **No wall-clock or absolute monotonic timestamps** — `time.monotonic()` is
+  seconds since boot, so a literal that works locally fails on a fresh runner.
+  Always compute relative to a value captured inside the test.
+- **No `sleep`, no network, no DDS, no database** in a unit test. Anything that
+  needs those belongs in the replay smoke.
+- **No dependence on ambient state** (a sourced workspace, a running node, a
+  leftover file, another test). Tests must pass in any order.
+- **Never `except: pass`** — swallowing the failure is how the original bug
+  survived.
+- **Frame-counted thresholds are rate-dependent**: a window in frames halves at
+  10 Hz versus 5 Hz. Parametrise by rate.
+- **A pass with zero rows processed is a failure** — assert the count.
+- **Verify the test fails** when you break the behaviour deliberately, once,
+  before opening the PR.
+
+Pinning a bug you are not fixing yet — use a **strict xfail**, never a skip or a
+deletion: `@pytest.mark.xfail(strict=True, reason="…")`. It reports every run and **turns red when the bug is fixed**,
+which forces the test to be promoted. Record the reason in the inventory.
+
+Changing a topic, message type or QoS? Update this repo's declaration under
+`infra/contracts/decls/` in the same PR — the chain check validates it.
+
+Full guidelines: [`infra/REGRESSION-GATES.md` §6](https://github.com/Metrolla-Inc/infra/blob/master/REGRESSION-GATES.md#6-writing-a-new-test--guidelines).
