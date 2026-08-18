@@ -70,3 +70,26 @@ XFAIL here always means "known-missing fix, tracked to v1.0.7-dual", never
 "mystery failure we silenced". The FAIL/ABORT split exists because of the
 standing verify-don't-guess rule: a suite that could not run is unverified,
 and unverified must never be reported as healthy.
+
+## Where these tests run, and where the results go
+
+**Stored** in this repo, beside the code they test — `tests/`. There is no central test tree: packages that are vendored into the `datablade` monorepo carry their tests with them, and the standalone repo stays the source of truth.
+
+**Run** in these environments:
+
+| Environment | What runs | When |
+|---|---|---|
+| Developer machine | Any suite in the inventory above | On demand — commands in this file and in `AGENTS.md` |
+| CI — GitHub `ubuntu-latest` hosted runner | `unit (launch/config contract tests)`, `manifest-lint` | Every push and pull request to `main` and `feat/**` |
+
+**Results** are stored by GitHub Actions — there is no separate test-results database:
+
+| Output | Where | Retention |
+|---|---|---|
+| Full logs, per-test output, job timings | The Actions run page for this repo | 90 days (org default) |
+| Job summaries | `$GITHUB_STEP_SUMMARY` on the run page | With the run |
+| Test code and this inventory | This repo, in git | Permanent |
+
+Results expire with the log retention and nothing aggregates history yet — flake rate, duration drift, or how long an xfail has been open. That is Phase 6 of the program, not built yet.
+
+Org-wide map of every gated repo and environment: [`infra/REGRESSION-GATES.md`](https://github.com/Metrolla-Inc/infra/blob/master/REGRESSION-GATES.md).
