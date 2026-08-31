@@ -67,3 +67,61 @@ jobs:
           tags: ghcr.io/metrolla-inc/seyond_drivers:${{ steps.tag.outputs.tag }}-unified
           cache-from: type=registry,ref=ghcr.io/metrolla-inc/seyond_drivers:latest-unified
           cache-to: type=registry,ref=ghcr.io/metrolla-inc/seyond_drivers:latest-unified,mode=max
+
+  r2-sync:
+    # Sync the built image into the openBalena registry storage (Cloudflare R2)
+    # so fleet releases can reference it with zero-byte blob mounts instead of
+    # re-uploading through the shop uplink. NO-OP until the org secrets
+    # R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT are configured.
+    needs: build-and-push-unified
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check R2 sync configured
+        id: r2
+        run: echo "enabled=${{ secrets.R2_ACCESS_KEY_ID != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute tag
+        if: steps.r2.outputs.enabled == 'true'
+        id: tag
+        shell: bash
+        run: |
+          REF="${{ github.ref_name }}"
+          SAFE="${REF//\//-}"
+          SAFE="${SAFE,,}"
+          SAFE="$(echo "$SAFE" | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+|-+$//g')"
+          echo "tag=$SAFE" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ghcr (source)
+        if: steps.r2.outputs.enabled == 'true'
+        run: echo "${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ secrets.PACKAGES_TOKEN != '' && 'metrolla-inc' || github.actor }}" --password-stdin
+
+      - name: Start R2-backed registry sidecar
+        if: steps.r2.outputs.enabled == 'true'
+        run: |
+          docker run -d --name r2reg -p 5000:5000 \
+            -e REGISTRY_STORAGE=s3 \
+            -e REGISTRY_STORAGE_S3_BUCKET=openbalena-registry \
+            -e REGISTRY_STORAGE_S3_REGION=auto \
+            -e REGISTRY_STORAGE_S3_REGIONENDPOINT="${{ secrets.R2_ENDPOINT }}" \
+            -e REGISTRY_STORAGE_S3_ACCESSKEY="${{ secrets.R2_ACCESS_KEY_ID }}" \
+            -e REGISTRY_STORAGE_S3_SECRETKEY="${{ secrets.R2_SECRET_ACCESS_KEY }}" \
+            -e REGISTRY_STORAGE_S3_FORCEPATHSTYLE=true \
+            -e REGISTRY_STORAGE_S3_ROOTDIRECTORY=data \
+            -e REGISTRY_STORAGE_REDIRECT_DISABLE=true \
+            -e REGISTRY_STORAGE_S3_CHUNKSIZE=33554432 \
+            registry:3
+          for i in $(seq 1 30); do curl -fs http://localhost:5000/v2/ >/dev/null && exit 0; sleep 1; done
+          echo "registry sidecar failed to start"; docker logs r2reg; exit 1
+
+      - name: Sync image to R2 library
+        if: steps.r2.outputs.enabled == 'true'
+        run: |
+          set +e
+          for attempt in 1 2 3; do
+            skopeo copy --all --retry-times 3 --dest-tls-verify=false \
+            "docker://ghcr.io/metrolla-inc/seyond_drivers:${{ steps.tag.outputs.tag }}-unified" \
+            "docker://localhost:5000/library/seyond_drivers:${{ steps.tag.outputs.tag }}-unified" && exit 0
+            echo "attempt $attempt failed; registry log tail:"; docker logs r2reg 2>&1 | tail -20
+            sleep 15
+          done
+          exit 1

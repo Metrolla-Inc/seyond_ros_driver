@@ -46,9 +46,10 @@ RUN apt-get update && \
 
 # Copy config, launch files, and entrypoint
 COPY src/seyond_lidar_ros/config/config.yaml config/config.yaml
+COPY src/seyond_lidar_ros/config/two-config.yaml config/two-config.yaml
 COPY src/seyond_lidar_ros/launch/ launch/
 COPY entrypoint-unified.sh /usr/local/bin/entrypoint-unified.sh
 RUN chmod +x /usr/local/bin/entrypoint-unified.sh
 
 ENTRYPOINT ["entrypoint-unified.sh"]
-CMD ["ros2", "launch", "seyond", "start_with_config.py"]
+CMD ["bash", "-c", "sleep 30; ros2 launch seyond start_with_config.py"]

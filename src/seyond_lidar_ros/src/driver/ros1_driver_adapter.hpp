@@ -1,5 +1,5 @@
 /**********************************************************************************************************************
-Copyright (c) 2025 Seyond
+Copyright (c) 2024 Seyond
 All rights reserved
 
 By downloading, copying, installing or using the software you agree to this license. If you do not agree to this
@@ -32,6 +32,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/Imu.h>
 #include <std_msgs/Float64.h>
 
 #include <limits>
@@ -73,6 +74,12 @@ class ROSAdapter {
                                                               std::placeholders::_2, std::placeholders::_3,
                                                               std::placeholders::_4));
     }
+
+    if (lidar_config_.enable_imu_msg) {
+      inno_imu_pub_ = nh_->advertise<sensor_msgs::Imu>("/iv_imu", 10);
+      driver_ptr_->register_publish_imu_callback(
+          std::bind(&ROSAdapter::publishImu, this, std::placeholders::_1, std::placeholders::_2));
+    }
   }
 
   void start() {
@@ -100,8 +107,8 @@ class ROSAdapter {
       pcl::toROSMsg(*driver_ptr_->pcl_pc_ptr, ros_msg);
       ros_msg.header.frame_id = lidar_config_.frame_id;
       ros_msg.header.stamp = ros::Time().fromSec(msg->timestamp * 1e-6);
-      ros_msg.width = driver_ptr_->pcl_pc_ptr->width;
-      ros_msg.height = driver_ptr_->pcl_pc_ptr->height;
+      ros_msg.width = driver_ptr_->pcl_pc_ptr->points.size();
+      ros_msg.height = 1;
       inno_frame_pub_.publish(std::move(ros_msg));
       driver_ptr_->pcl_pc_ptr->clear();
     }
@@ -147,6 +154,20 @@ class ROSAdapter {
     inno_frame_pub_.publish(std::move(ros_msg));
   }
 
+  void publishImu(const std::vector<float>& imu_data, uint64_t imu_ts_ns) {
+    sensor_msgs::Imu ros_msg;
+    ros_msg.header.frame_id = lidar_config_.frame_id;
+    ros_msg.header.stamp.sec = imu_ts_ns / 1000000000;
+    ros_msg.header.stamp.nsec = imu_ts_ns % 1000000000;
+    ros_msg.linear_acceleration.x = imu_data[0];
+    ros_msg.linear_acceleration.y = imu_data[1];
+    ros_msg.linear_acceleration.z = imu_data[2];
+    ros_msg.angular_velocity.x = imu_data[3];
+    ros_msg.angular_velocity.y = imu_data[4];
+    ros_msg.angular_velocity.z = imu_data[5];
+    inno_imu_pub_.publish(std::move(ros_msg));
+  }
+
  private:
   seyond::LidarConfig lidar_config_;
   std::shared_ptr<ros::NodeHandle> nh_;
@@ -155,6 +176,7 @@ class ROSAdapter {
 
   ros::Publisher inno_frame_pub_;
   ros::Publisher inno_pkt_pub_;
+  ros::Publisher inno_imu_pub_;
   ros::Subscriber inno_pkt_sub_;
 
   std::unique_ptr<seyond::SeyondScan> inno_scan_msg_;
@@ -210,6 +232,10 @@ class ROSNode {
     // common
     private_nh_->param("log_level", common_config_.log_level, std::string("info"));
     common_config_.fusion_enable = false;
+    // unused parameters, but still set default values
+    common_config_.fusion_topic = "/iv_points_fusion";
+    common_config_.fusion_time_window = 50;
+    common_config_.fusion_buffer_size = 10;
 
     // Parse parameters for ros
     private_nh_->param("replay_rosbag", lidar_config.replay_rosbag, false);
@@ -227,17 +253,18 @@ class ROSNode {
     private_nh_->param("reflectance_mode", lidar_config.reflectance_mode, true);
     private_nh_->param("multiple_return", lidar_config.multiple_return, 1);
     private_nh_->param("enable_falcon_ring", lidar_config.enable_falcon_ring, false);
+    private_nh_->param("enable_imu_msg", lidar_config.enable_imu_msg, false);
 
     private_nh_->param("continue_live", lidar_config.continue_live, false);
 
+    private_nh_->param("inno_pc_file", lidar_config.inno_pc_file, std::string(""));
     private_nh_->param("pcap_file", lidar_config.pcap_file, std::string(""));
     private_nh_->param("hv_table_file", lidar_config.hv_table_file, std::string(""));
     private_nh_->param("packet_rate", lidar_config.packet_rate, 10000);
     private_nh_->param("file_rewind", lidar_config.file_rewind, 0);
 
     private_nh_->param("max_range", lidar_config.max_range, 2000.0);  // unit: meter
-    private_nh_->param("min_range", lidar_config.min_range, 0.4);     // unit: meter
-    private_nh_->param("name_value_pairs", lidar_config.name_value_pairs, std::string(""));
+    private_nh_->param("min_range", lidar_config.min_range, 0.1);     // unit: meter
     private_nh_->param("coordinate_mode", lidar_config.coordinate_mode, 3);
 
     private_nh_->param("transform_enable", lidar_config.transform_enable, false);

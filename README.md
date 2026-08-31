@@ -47,6 +47,8 @@ inventory cannot go stale.
 - Robin-W
   
 - Robin-ELITE(Robin-E1X)
+
+- Hummingbird-D1
   
 
 # Environment and Dependencies
@@ -95,6 +97,7 @@ please refer to [config.yaml](/src/seyond_lidar_ros/config/config.yaml), support
 | reflectance_mode | true | 0:intensiy mode 1:reflectance mode |
 | multiple_return | 1   | lidar detection echo mode |
 | enable_falcon_ring | false | enable falcon ring_id calculation |
+| enable_imu_msg     | false | enable imu message publish |
 | continue_live | false | fatal error encountered, restart driver |
 | pcap_file | ""  | path of path playback pcapfile |
 | hv_table_file | ""  | path of hv table file, only for generic lidar |
@@ -158,7 +161,7 @@ ros2 launch seyond start.py
 
 [Record & Replay](doc/04_how_to_record_data.md)
 
-[Transform pointcloud](05_how_to_enable_transform.md)
+[Transform pointcloud](doc/05_how_to_enable_transform.md)
 
 [Frame Test](doc/06_how_to_use_test_node.md)
 
