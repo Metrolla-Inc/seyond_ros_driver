@@ -1,0 +1,12 @@
+# Upstream authors of this fork (vendor history). A commit whose author AND committer both match
+# a line here is upstream history brought in by a sync: .ci/authorship_check.py then checks only
+# for assistant markers. Metrolla's own commits never match: they must be Adam Szablya
+# <aszablya@metrolla.com>. One Python regex per line, matched against 'Name <email>'.
+# Add an upstream contributor here in the sync pull request that brings their commit in.
+# Vendor domains:
+@([a-z0-9-]+\.)?seyond\.com>$
+@([a-z0-9-]+\.)?innovusion\.com>$
+# Individual upstream contributors seen in this fork's history:
+<162529661\+guyuechaocc@users\.noreply\.github\.com>$
+<timonmentink@gmail\.com>$
+<wenfeng_house@126\.com>$
