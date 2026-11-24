@@ -122,6 +122,50 @@ record the digest; pull requests build without pushing; branch pushes push nothi
 `master` and `v*` branches pushed `:<branch>`, `-hb`, `-unified`, and every build rewrote the cache
 tags `:latest`, `:latest-hb`, `:latest-unified`).
 
+## sensor-tool: the sensor's own settings
+
+`docker/sensor_tool.py` is installed in the main image as `/usr/local/bin/sensor-tool` (not in the
+`-hb` and `-unified` images). The driver never runs it. The host does (`metrolla-hostd`, verb
+`sensor.program`; metrolla-edge `docs/sensor-program.md` has the interface, version 1, and the job
+around it), in its own container with `--entrypoint sensor-tool`, the host's network, and this
+sensor's driver stopped.
+
+```
+sensor-tool probe    --ip A [--model M]
+sensor-tool get-net  --ip A [--model M] --driver-stopped
+sensor-tool set-net  --ip A --new-ip B --netmask M --gateway G [--no-reboot] [--dry-run] --driver-stopped
+sensor-tool set-dest --ip A --dest-ip H --data-port P [--dry-run] --driver-stopped
+sensor-tool set-ptp  --ip A --transport L2|UDPv4 --domain N --delay-mechanism E2E|P2P --timescale UTC|TAI [--dry-run] --driver-stopped
+```
+
+One JSON object per run, also for a usage error; exit 0 reported/set/unchanged, 2 a dry run that
+would change, 1 refused/failed/no answer, 3 unsupported, 5 a change sent and not read back.
+
+Two channels: text commands on TCP 8002 (one connection per command; **the control session**:
+every command that uses it needs `--driver-stopped`, and the tool never has two open at once)
+and HTTP reads on TCP 8010 (`/command/?get_sn`, `get_model`, `get_fw_version`,
+`get_udp_ports_ip`; the driver's own port, not a control session). The module's text names the
+file and line of every fact (the SDK submodule, the fleet's PTP service
+`core_system_containers/fs/usr/sbin/run_ptp4l.sh`, the vendor's binary).
+
+| Command | Does | Cannot, or not known |
+|---|---|---|
+| `probe` | HTTP only: serial number, model letter, firmware | the MAC address: no command for it is known |
+| `get-net` | `get_network`, `get_i_config time`, `get_status` (TCP 8002), `get_udp_ports_ip` (HTTP) | the form of the `get_network` reply is in no source: it is read leniently, and what is not understood is null with a warning |
+| `set-net` | `set_network`: twelve numbers (address, netmask, gateway), and the three addresses only if the sensor answers `Invalid command`; then both addresses are watched, and `reboot 1` is sent when the new address is stored and not taken | **`set_network` and `get_network` are known only from the vendor's closed tool** (`innovusion_lidar_util` in the SDK: its help text and the disassembly of `handle_set_network`). What the sensor replies, and whether it needs the restart, a real sensor must show |
+| `set-dest` | nothing: **always `unsupported`, exit 3, nothing sent, no connection** | a Seyond keeps no destination: the driver asks for the stream at each start (`set_udp_ports_ip`, ports only) and the sensor sends to the asker |
+| `set-ptp` | `set_i_config time ptp_automotive 0`, and `time_stamping` by the model letter (`h` 1, `w` and `l` 0, another letter: left alone); read back | **L2 and peer-to-peer PTP** (the whole step is `unsupported`: they exist only as gPTP); a domain other than 0; a timescale other than the model's (`w`, `l` TAI, `h` UTC); the clock source (no command chooses it: `time_source` says what the sensor reports) |
+
+- A field is listed in `unsupported` only when a value other than the sensor's is asked for.
+- Reading (`Reader`) and writing (`Writer`) are separate code. The reader refuses any text that is
+  not one of its three read commands, and a writer exists only in a run that writes with
+  `--driver-stopped`.
+- The part of the file between "the interface" and "Seyond: the two channels" is the same text in
+  every driver repository's sensor-tool (HesaiLidar_ROS_2.0, lslidar_ros2_driver, ouster-ros); a
+  test pins its hash. Change it in all of them or in none.
+- **Not run against a real sensor yet.** Tests: `tests/unit/test_sensor_tool.py`, against
+  `tests/unit/fake_seyond_sensor.py` on loopback.
+
 ## Gotchas (the bug classes this gate exists for)
 
 1. **Always-true env checks.** `os.environ.get('X') is True or 1 or "1"`
