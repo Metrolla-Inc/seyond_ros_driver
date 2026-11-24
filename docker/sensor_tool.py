@@ -711,6 +711,8 @@ def set_net(run: Run) -> None:
                     raise Stop("failed", f"the sensor took set_network (its reply: {writer.reply[:80]!r}) and still reports its old settings at {old}")
             else:
                 at = None
+        else:
+            at = None  # the address is not to change, and the sensor does not answer now
         if polls >= 3 and got is not None and new == old and got[1]["net"]["_read"]:
             out["after"], out["verified"], out["answers_at"] = public(last), False, old
             raise Stop("failed", f"the sensor took set_network (its reply: {writer.reply[:80]!r}) and still reports its old settings")
@@ -719,7 +721,7 @@ def set_net(run: Run) -> None:
         time.sleep(PAUSE)
     out["after"], out["verified"], out["answers_at"] = public(last) if at is not None else None, False, at
     raise Stop("unverified", f"set_network was sent, and the sensor did not answer with the new values at {new} within {args.verify_timeout:g} s"
-               + (f"; it answers at {at}" if at else "; it answers at neither address")
+               + (f"; it answers at {at}" if at else "; it answers at neither address" if new != old else "; it does not answer")
                + ("; a restart was sent" if out["reboot"] == "sent" else ""))
 
 

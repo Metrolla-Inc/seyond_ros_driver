@@ -476,6 +476,9 @@ def test_a_netmask_or_gateway_alone_is_set_at_the_same_address():
     with FakeSeyond(A, apply="never") as fake:
         answer, _ = run(fake, "set-net", "--ip", A, *words, expect="failed")
         assert answer["answers_at"] == A
+    with FakeSeyond(A, apply="vanish") as fake:
+        answer, status = run(fake, "set-net", "--ip", A, *words, expect="unverified", verify="0.5")
+        assert status == 5 and answer["answers_at"] is None and answer["message"].endswith("it does not answer")
 
 
 def test_a_sensor_whose_get_network_is_not_understood():
