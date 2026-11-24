@@ -559,6 +559,12 @@ def test_it_is_standard_library_python_started_isolated():
     assert imports <= {"__future__", "argparse", "http", "ipaddress", "json", "re", "socket", "sys", "time"}
 
 
+def test_the_image_installs_it_where_the_host_looks():
+    dockerfile = (REPO / "Dockerfile").read_text()
+    assert "COPY docker/sensor_tool.py /usr/local/bin/sensor-tool" in dockerfile and "chmod 0755 /usr/local/bin/sensor-tool" in dockerfile
+    assert "--entrypoint sensor-tool" in (REPO / "docker" / "smoke" / "smoke.sh").read_text()
+
+
 def test_the_interface_part_is_the_shared_text():
     """The part between the two marks is the same text in every driver repository's sensor-tool
     (HesaiLidar_ROS_2.0, lslidar_ros2_driver, ouster-ros, this one). A change here is a change there."""
