@@ -1,10 +1,13 @@
 name: Authorship
 
 # F6: every new commit and every author/maintainer field names Adam Szablya <aszablya@metrolla.com>;
-# no co-author trailers or "generated with" lines. Only commits new in this pull request (or, on a
+# no co-author trailers or "generated with" lines; no AI model or tool named in new commit
+# messages or the pull request body (F8). Only commits new in this pull request (or, on a
 # push, commits no other branch has) are checked: history already on the base branch is not.
 on:
   pull_request:
+    # F8: also when the description is edited (the body is checked)
+    types: [opened, synchronize, reopened, edited]
   push:
   workflow_dispatch:
 
@@ -24,6 +27,10 @@ jobs:
         run: python3 .ci/authorship_check.py --self-test
       - name: Check the pull request's commits (base..head)
         if: github.event_name == 'pull_request'
+        env:
+          # F8: the pull request body, checked for AI model and tool names (passed through the
+          # environment, never pasted into the script; an empty body is fine).
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: python3 .ci/authorship_check.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}"
       - name: Check the pushed branch's own commits
         if: github.event_name != 'pull_request' && github.ref_name != github.event.repository.default_branch

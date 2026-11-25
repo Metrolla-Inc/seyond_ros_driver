@@ -26,6 +26,13 @@ read, so old commits and upstream history do not fail it):
      address and a person's name must be the rule's name).
   4. Lines the range adds to any tracked file carry no assistant byline marker (rule 2b's markers
      and "Generated with [Claude").
+  6. No new commit message and no pull request body names an AI model or tool (F8): Fable, Codex,
+     Claude, Opus, Sonnet, Haiku, DeepSeek, GPT (GPT-4, ChatGPT, ...), Gemini, also in "Model: ..."
+     or "Built by ..." lines. Whole words, case-insensitive, in prose only (commit messages and the
+     pull request body, never source files). Allowed: text in `code spans` or fenced code blocks, a
+     word that is part of a file name, path or identifier (CLAUDE.md, .claude/, a host such as
+     name-offload, fable_audit), and "Opus" as the audio codec ("Opus codec", "Opus audio", ...).
+     Upstream commits in a fork (rule 1's exception) are not checked for it.
   5. No tracked file at HEAD, and no new commit message, contains a personal address of the owner
      (the work identity above is the only one to use). The address is held here only as a sha256
      of its normalised form (lower case; for the webmail domain, dots and any +tag in the local
@@ -37,6 +44,9 @@ Usage:
   python3 .ci/authorship_check.py --branch-only                # a push: commits on no other branch
   python3 .ci/authorship_check.py --self-test
   add --json for machine output.
+  The pull request body is read from the environment variable PR_BODY (the workflow passes
+  github.event.pull_request.body; --body-env NAME picks another variable, --body-file PATH a file).
+  An empty or missing body is not an error: there is nothing to check.
 Exit codes: 0 clean, 1 a finding (or an error).
 Standard library only.
 """
@@ -69,6 +79,46 @@ ASSISTANT_MARKERS = [
 ]
 TRAILER_COAUTHOR = re.compile(r"^\s*co-authored" + r"-by\s*:", re.I | re.M)
 LINE_GENERATED = re.compile(r"^\W{0,4}\s*generated" + r" with\b", re.I | re.M)
+
+# F8: AI model and tool names in prose (commit messages, the pull request body).
+AI_MODEL_MENTION = re.compile(
+    r"(?<![\w./\\-])(?:fable|codex|claude|opus|sonnet|haiku|deep-?seek|chat-?gpt|gpt(?:-?\d[\w.]*)?|gemini)"
+    r"(?![\w/\\]|[.\-_][A-Za-z0-9])", re.I)
+AI_ALLOWED_AFTER = re.compile(r"\s+(?:codec|audio|encoder|decoder|encoding|decoding|stream|bitrate|frames?|packets?)\b",
+                              re.I)
+FENCE = re.compile(r"^\s*(```|~~~)")
+CODE_SPAN = re.compile(r"`[^`\n]*`")
+
+
+def ai_mentions(text: str) -> list[tuple[int, str]]:
+    """(line number, word) for every AI model or tool name in TEXT used as prose (rule 6)."""
+    out: list[tuple[int, str]] = []
+    in_fence = False
+    for n, line in enumerate((text or "").splitlines(), 1):
+        if FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        prose = CODE_SPAN.sub(lambda m: " " * len(m.group(0)), line)
+        for m in AI_MODEL_MENTION.finditer(prose):
+            if m.group(0).lower() == "opus" and AI_ALLOWED_AFTER.match(prose, m.end()):
+                continue
+            out.append((n, m.group(0)))
+    return out
+
+
+def check_body(body: str | None) -> list[dict]:
+    """Rule 6 on the pull request body, plus rule 2's assistant markers and co-author trailers."""
+    body = body or ""
+    found = [{"file": "(pull request body)", "line": n, "rule": "ai-model-mention",
+              "detail": f"names an AI model or tool: {w!r}"} for n, w in ai_mentions(body)]
+    for pat in ASSISTANT_MARKERS + [TRAILER_COAUTHOR]:
+        m = pat.search(body)
+        if m:
+            found.append({"file": "(pull request body)", "line": body.count("\n", 0, m.start()) + 1,
+                          "rule": "assistant-marker", "detail": m.group(0).strip()})
+    return found
 
 META_NAMES = {
     "package.xml", "setup.py", "setup.cfg", "pyproject.toml", "package.json", "cargo.toml",
@@ -169,6 +219,8 @@ def check_commit(sha: str, upstream: list[re.Pattern], cwd: str | None,
         github_made or matches_any(f"{cn} <{ce}>", upstream))
     if upstream_commit:
         return found
+    for n, w in ai_mentions(body):
+        add("ai-model-mention", f"message line {n} names an AI model or tool: {w!r}")
     for m in TRAILER_COAUTHOR.finditer(body):
         line = body[m.start():].splitlines()[0].strip()
         add("co-author-trailer", line)
@@ -305,7 +357,7 @@ def check_tree(head: str, cwd: str | None, personal: set[str] = PERSONAL_SHA256)
 # ---------------------------------------------------------------- main
 
 def run(base: str | None, head: str, branch_only: bool, cwd: str | None = None,
-        personal: set[str] = PERSONAL_SHA256) -> dict:
+        personal: set[str] = PERSONAL_SHA256, body: str | None = None) -> dict:
     upstream = load_upstream(cwd)
     if branch_only:
         commits = commits_on_branch_only(head, cwd)
@@ -320,6 +372,7 @@ def run(base: str | None, head: str, branch_only: bool, cwd: str | None = None,
     if commits:
         findings += check_added(base, head, upstream, cwd)
     findings += check_tree(head, cwd, personal)
+    findings += check_body(body)
     return {"base": base, "head": head, "commits": len(commits), "findings": findings}
 
 
@@ -333,7 +386,8 @@ def report(res: dict, as_json: bool) -> int:
             print(f"  FAIL {where}: {f['rule']}: {f['detail']}")
         if res["findings"]:
             print(f"{len(res['findings'])} finding(s). Rule: author and committer "
-                  f"{RULE_NAME} <{RULE_EMAIL}>, no co-author or generated-with lines.")
+                  f"{RULE_NAME} <{RULE_EMAIL}>, no co-author or generated-with lines, "
+                  "no AI model or tool named in commit messages or the pull request body.")
         else:
             print("ok")
     return 1 if res["findings"] else 0
@@ -397,11 +451,11 @@ def self_test() -> int:
 
         g("checkout", "-q", "-b", "bad-trailer", "good")
         commit("bad\n\nCo-Authored" + "-By: Claude <noreply" + _AT + "anthropic.com>", {"b.txt": "b"})
-        expect("co-author trailer", "good", "HEAD", ["assistant-marker", "co-author-trailer"])
+        expect("co-author trailer", "good", "HEAD", ["ai-model-mention", "assistant-marker", "co-author-trailer"])
 
         g("checkout", "-q", "-b", "bad-generated", "good")
         commit("bad\n\n\U0001F916 Generated" + " with [Claude Code](https://example.invalid)", {"c.txt": "c"})
-        expect("generated-with line", "good", "HEAD", ["assistant-marker", "generated-with-line"])
+        expect("generated-with line", "good", "HEAD", ["ai-model-mention", "assistant-marker", "generated-with-line"])
 
         g("checkout", "-q", "-b", "bad-author", "good")
         commit("someone else", {"d.txt": "d"}, env=other)
@@ -447,6 +501,46 @@ def self_test() -> int:
                {"u2.txt": "u"}, env=other)
         expect("upstream commit, assistant marker still fails", base_sync, "HEAD", ["assistant-marker"])
 
+    # F8 rule 6: AI model and tool names in commit messages and the pull request body
+    names = ["Fable", "Codex", "Claude", "Opus", "Sonnet", "Haiku", "DeepSeek", "GPT", "GPT-4o", "ChatGPT", "Gemini"]
+    for w in names:
+        if len(ai_mentions(f"Built by {w}, reviewed")) != 1:
+            failures.append(f"ai-model-mention: {w!r} in prose not found")
+    prose_cases = [("Model: Opus", 1), ("Built by Codex (Lane 6), reviewed by the coordinator.", 1),
+                   ("model OPUS subagent", 1), ("a fable audit", 1), ("claude code", 1), ("(gpt-5)", 1),
+                   ("Update CLAUDE.md and .claude/settings", 0), ("ran on claude-offload", 0),
+                   ("tests/test_fable_audit.py", 0), ("see `Claude` in the code", 0),
+                   ("```\nclaude --print\n```", 0), ("Opus codec at 48 kHz", 0), ("opus audio stream", 0),
+                   ("opuscule, haikus, sonnets", 0), ("gPTP time sync", 0), ("", 0),
+                   ("Model: Hesai XT32", 0), ("Built by GitHub Actions", 0)]
+    for text, want in prose_cases:
+        got = len(ai_mentions(text))
+        if got != want:
+            failures.append(f"ai-model-mention: {text!r}: {got} finding(s), want {want}")
+    if check_body(None) or check_body("") or len(check_body("Done.\n\nModel: Sonnet.")) != 1 or \
+            [f["rule"] for f in check_body("Done.\n\nhttps://" + "claude.ai/code/" + "session_x")] != ["assistant-marker"]:
+        failures.append("ai-model-mention: pull request body (empty body, or one mention)")
+    with tempfile.TemporaryDirectory() as d2:
+        def g2(*a):
+            e = dict(os.environ, GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null", **ok_id)
+            r = subprocess.run(["git", *a], cwd=d2, env=e, capture_output=True, text=True)
+            if r.returncode:
+                raise RuntimeError(r.stderr)
+            return r.stdout.strip()
+        g2("init", "-q", "-b", "main")
+        g2("commit", "-q", "--allow-empty", "-m", "base")
+        g2("commit", "-q", "--allow-empty", "-m", "feature\n\nBuilt by Codex, model Opus.")
+        got = sorted({f["rule"] for f in run("HEAD~1", "HEAD", False, cwd=d2, personal=test_personal)["findings"]})
+        if got != ["ai-model-mention"]:
+            failures.append(f"ai-model-mention in a commit message: got {got}")
+        g2("commit", "-q", "--allow-empty", "-m", "clean change (Opus codec, CLAUDE.md)")
+        res = run("HEAD~1", "HEAD", False, cwd=d2, personal=test_personal, body="Fixes the thing.")
+        if res["findings"]:
+            failures.append(f"clean commit and body: got {res['findings']}")
+        res = run("HEAD~1", "HEAD", False, cwd=d2, personal=test_personal, body="Fixes it.\n\nModel: Fable.")
+        if [f["rule"] for f in res["findings"]] != ["ai-model-mention"]:
+            failures.append(f"model named in the pull request body: got {res['findings']}")
+
     for f in failures:
         print("SELF-TEST FAIL:", f)
     print("self-test:", "ok" if not failures else f"{len(failures)} failure(s)")
@@ -461,14 +555,21 @@ def main(argv: list[str] | None = None) -> int:
                     help="check the commits on HEAD that no other remote branch or tag has (a push)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--body-env", default="PR_BODY",
+                    help="environment variable holding the pull request body (default PR_BODY; empty: skipped)")
+    ap.add_argument("--body-file", help="read the pull request body from this file instead")
     a = ap.parse_args(argv)
     if a.self_test:
         return self_test()
     if not a.base and not a.branch_only:
         ap.error("give --base (pull request) or --branch-only (push)")
     try:
-        res = run(a.base, a.head, a.branch_only)
-    except RuntimeError as e:
+        if a.body_file:
+            body = Path(a.body_file).read_text(encoding="utf-8")
+        else:
+            body = os.environ.get(a.body_env or "PR_BODY", "")
+        res = run(a.base, a.head, a.branch_only, body=body)
+    except (RuntimeError, OSError) as e:
         print(f"authorship check: error: {e}", file=sys.stderr)
         return 1
     return report(res, a.json)
