@@ -1,0 +1,2 @@
+# Repository checks (authorship check etc.) are not part of the image.
+.ci/

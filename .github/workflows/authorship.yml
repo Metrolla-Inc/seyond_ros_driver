@@ -1,0 +1,30 @@
+name: Authorship
+
+# F6: every new commit and every author/maintainer field names Adam Szablya <aszablya@metrolla.com>;
+# no co-author trailers or "generated with" lines. Only commits new in this pull request (or, on a
+# push, commits no other branch has) are checked: history already on the base branch is not.
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorship:
+    name: authorship (new commits and metadata)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Checker self-test
+        run: python3 .ci/authorship_check.py --self-test
+      - name: Check the pull request's commits (base..head)
+        if: github.event_name == 'pull_request'
+        run: python3 .ci/authorship_check.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}"
+      - name: Check the pushed branch's own commits
+        if: github.event_name != 'pull_request' && github.ref_name != github.event.repository.default_branch
+        run: python3 .ci/authorship_check.py --branch-only
