@@ -131,6 +131,7 @@ class FakeSeyond:
             self.connections += 1
             self.open_now += 1
             self.max_open = max(self.max_open, self.open_now)
+        counted = True
         try:
             data = b""
             while not data.endswith(b"\n"):
@@ -141,10 +142,16 @@ class FakeSeyond:
             text = data.decode().strip()
             self.received.append(text)
             reply, after = self._reply(text)
-            connection.sendall(reply.encode() + b"\n\n")
-        finally:
+            # The reply ends the connection: for the count it is closed now. The tool may open its
+            # next connection as soon as it has the reply, before this thread runs again.
             with self._lock:
                 self.open_now -= 1
+            counted = False
+            connection.sendall(reply.encode() + b"\n\n")
+        finally:
+            if counted:
+                with self._lock:
+                    self.open_now -= 1
         if after is not None:
             self._later(after)
 
