@@ -12,6 +12,8 @@
 #      (continue_live) and stops cleanly.
 #   5. Synthetic Robin-W: seyond_node (same restrictions) replays fake_seyond.py's packets from the
 #      contract's configuration with only the file source added; PointCloud2 checked.
+#   6. sensor-tool: in the image, run with the host's options; a usage error and set-dest
+#      (unsupported on a Seyond) each print one JSON object. Nothing is contacted.
 set -euo pipefail
 
 IMAGE=${1:?usage: smoke.sh IMAGE [OLD_IMAGE]}
@@ -193,6 +195,30 @@ cat "$WORK/check.json"
 expect "3 PointCloud2 on /west/iv_points decoded from synthetic packets (exit $code)" test "$code" = 0
 docker logs "$NAME-replay" 2>&1 | grep -E "get first frame|play rate|corrup|crc" | head -5 || true
 docker rm -f "$NAME-replay" > /dev/null
+
+# ---------------------------------------------------------------------------------------------
+echo "== 6. sensor-tool is in the image and answers as the host runs it"
+# The host's own options (metrolla-edge, sensor.program). Neither run contacts anything: a usage
+# error, and set-dest, which a Seyond cannot do. Each must print its one JSON object.
+TOOL_RUN=(docker run --rm --network host --read-only --cap-drop ALL --security-opt no-new-privileges:true
+          --user 65534:65534 --pids-limit 64 --memory 256m --tmpfs /tmp:size=8m --entrypoint sensor-tool "$IMAGE")
+tool_answer() {  # EXIT COMMAND OUTCOME ARGS...: the tool exits EXIT and says OUTCOME
+    local want=$1 command=$2 outcome=$3 out code=0
+    shift 3
+    out=$("${TOOL_RUN[@]}" "$command" "$@") || code=$?
+    echo "$out"
+    [[ $code == "$want" ]] || return 1
+    python3 -c '
+import json, sys
+answer = json.loads(sys.argv[1])
+want = (1, "seyond", sys.argv[2], sys.argv[3], int(sys.argv[4]))
+assert (answer["sensor_tool"], answer["vendor"], answer["command"], answer["outcome"], answer["exit_code"]) == want, answer
+assert answer["sessions"] == {"command": 0, "http": 0, "max_concurrent": 0}, answer
+' "$out" "$command" "$outcome" "$want"
+}
+expect "sensor-tool: a usage error is one JSON object, exit 1" tool_answer 1 probe refused
+expect "sensor-tool: set-dest is unsupported, exit 3, nothing contacted" \
+    tool_answer 3 set-dest unsupported --ip 192.0.2.10 --dest-ip 192.0.2.1 --data-port 8010 --driver-stopped
 
 if [[ $FAILED != 0 ]]; then
     echo "== contract driver log"; cat "$WORK/driver.log"

@@ -101,3 +101,13 @@
 ### Added (upstream, not used by this fleet)
 - Support for hd1-w and E2; HB fault table; HD IMU recording in get_pcd.
 
+## [unreleased] sensor-tool
+
+### Added
+- `sensor-tool` in the main image (`/usr/local/bin/sensor-tool`, from `docker/sensor_tool.py`):
+  reads and sets the sensor's own settings for metrolla-edge's `sensor.program`, interface
+  version 1 (`probe`, `get-net`, `set-net`, `set-dest`, `set-ptp`; one JSON object per run).
+  `set-net` sends `set_network` (known only from the vendor's closed tool), `set-ptp` sets
+  `[time] ptp_automotive 0` and `time_stamping` by model, `set-dest` is always `unsupported`
+  (a Seyond keeps no destination), L2 and peer-to-peer PTP are `unsupported`. Tested against a
+  fake sensor only. The driver and both entrypoints are unchanged.

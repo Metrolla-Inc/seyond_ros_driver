@@ -34,7 +34,10 @@ jobs:
         run: python -m pip install pytest==9.0.1 pyyaml==6.0.3 shellcheck-py==0.11.0.1
 
       - name: Launch/config contract, environment contract, legacy entrypoint, synthetic sensor
-        run: python -m pytest tests --ignore=tests/regression -v -ra
+        run: python -m pytest tests --ignore=tests/regression --ignore=tests/unit/test_sensor_tool.py -v -ra
+
+      - name: sensor-tool against a fake sensor on loopback (no real sensor)
+        run: python -m pytest tests/unit/test_sensor_tool.py -v -ra
 
       - name: shellcheck (new scripts; the entrypoints' legacy parts stay byte-identical to the release)
         run: shellcheck docker/contract-entrypoint.sh docker/smoke/smoke.sh

@@ -30,6 +30,13 @@ RUN chmod +x entrypoint.sh && cp entrypoint.sh /usr/local/bin/
 RUN chmod 0755 docker/contract-entrypoint.sh docker/seyond_env.py \
     && chmod -R a+rX docker \
     && python3 -I docker/seyond_env.py selfcheck
+
+# sensor-tool (docker/sensor_tool.py): reads and sets the sensor's own address and PTP settings.
+# The host runs it as its own container, `--entrypoint sensor-tool`, with this sensor's driver
+# stopped; the driver never runs it. Standard library Python, no ROS.
+COPY docker/sensor_tool.py /usr/local/bin/sensor-tool
+RUN chmod 0755 /usr/local/bin/sensor-tool \
+    && python3 -I -c "import ast; ast.parse(open('/usr/local/bin/sensor-tool').read())"
 ENTRYPOINT ["entrypoint.sh"]
 # Default command to run the driver
 CMD ["ros2", "launch", "seyond", "start_with_config.py"]
